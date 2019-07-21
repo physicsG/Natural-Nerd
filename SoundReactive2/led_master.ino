@@ -4,9 +4,9 @@
 #include "reactive_common.h"
 
 #define READ_PIN 0
-#define BUTTON_PIN D1
+#define BUTTON_PIN 2
 
-#define NUMBER_OF_CLIENTS 3
+#define NUMBER_OF_CLIENTS 1
 
 const int checkDelay = 5000;
 const int buttonDoubleTapDelay = 200;
@@ -32,7 +32,7 @@ static int opMode = 1;
 void setup()
 {
   pinMode(READ_PIN, INPUT);
-  pinMode(BUTTON_PIN, INPUT );
+  pinMode(BUTTON_PIN, INPUT);
 
   /* WiFi Part */
   Serial.begin(115200);
@@ -96,6 +96,7 @@ void sendLedData(uint32_t data, uint8_t op_mode)
 }
 
 void waitForConnections() {
+  Serial.println("Waiting for connections...");
   while(true) {
       readHeartBeat();
       if (checkHeartBeats()) {
@@ -114,6 +115,7 @@ void resetHeartBeats() {
 
 void readHeartBeat() {
   struct heartbeat_message hbm;
+
  while(true) {
   int packetSize = UDP.parsePacket();
   if (!packetSize) {
@@ -142,6 +144,8 @@ bool checkHeartBeats() {
 void buttonCheck()
 {
   int but = digitalRead(BUTTON_PIN);
+  Serial.print("buttonCheck: ");
+  Serial.println(but);
   if (but == 0) {
     if (millis() - buttonChecked < buttonDoubleTapDelay && buttonClicked == false ) {
       doubleClicked();
