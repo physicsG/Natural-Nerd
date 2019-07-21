@@ -1,4 +1,3 @@
-
 #define FASTLED_INTERRUPT_RETRY_COUNT 0 
 #define FASTLED_ALLOW_INTERRUPTS 0
 #include <FastLED.h>
@@ -6,8 +5,10 @@
 #include <WiFiUDP.h>
 #include "reactive_common.h"
 
-#define LED_PIN 2
+#define LED_PIN 0
+#define BUTTON_PIN 2
 #define NUM_LEDS 144
+#define MAX_BRIGHTNESS 255
 
 #define MIC_LOW 0
 #define MIC_HIGH 644
@@ -30,10 +31,19 @@ struct averageCounter *longTermSamples;
 struct averageCounter* sanityBuffer;
 
 float globalHue;
-float globalBrightness = 255;
+float globalBrightness = MAX_BRIGHTNESS;
 int hueOffset = 120;
 float fadeScale = 1.3;
 float hueIncrement = 0.7;
+
+//Button settings
+const int buttonDoubleTapDelay = 200;
+unsigned long lastChecked;
+unsigned long buttonChecked;
+bool buttonClicked = false;
+bool queueDouble = false;
+bool clickTrigger;
+bool doubleTapped;
 
 struct led_command {
   uint8_t opmode;
@@ -87,8 +97,9 @@ void sendHeartBeat() {
     lastHeartBeatSent = millis();
 }
 
-void loop()
-{
+void loop() {
+  buttonCheck();
+  
   if (millis() - lastHeartBeatSent > heartBeatInterval) {
     sendHeartBeat();
   }
@@ -130,7 +141,7 @@ void loop()
 
 void allWhite() {
   for (int i = 0; i < NUM_LEDS; i++) {
-    leds[i] = CRGB(255, 255, 235);
+    leds[i] = CRGB(globalBrightness, globalBrightness, globalBrightness);
   }
   delay(5);
   FastLED.show();
@@ -139,8 +150,10 @@ void allWhite() {
 void chillFade() {
   static int fadeVal = 0;
   static int counter = 0;
-  static int from[3] = {0, 234, 255};
-  static int to[3]   = {255, 0, 214};
+  int fromGreen = max((int)globalBrightness - 21, 0);
+  int toBlue = max((int)globalBrightness - 41, 0);
+  static int from[3] = {0, fromGreen, globalBrightness};
+  static int to[3]   = {globalBrightness, 0, toBlue};
   static int i, j;
   static double dsteps = 500.0;
   static double s1, s2, s3, tmp1, tmp2, tmp3;
@@ -221,7 +234,7 @@ void soundReactive(int analogRaw) {
   {
     if (i < curshow)
     {
-      leds[i] = CHSV(globalHue + hueOffset + (i * 2), 255, 255);
+      leds[i] = CHSV(globalHue + hueOffset + (i * 2), globalBrightness, globalBrightness);
     }
     else
     {
@@ -239,7 +252,7 @@ void connectToWifi() {
   {
     leds[i] = CHSV(0, 0, 0);
   }
-  leds[0] = CRGB(0, 255, 0);
+  leds[0] = CRGB(0, globalBrightness, 0);
   FastLED.show();
   
   int i = 0;
@@ -253,7 +266,7 @@ void connectToWifi() {
   Serial.println("Connection established!");
   Serial.print("IP address:\t");
   Serial.println(WiFi.localIP()); // Send the IP address of the ESP8266 to the computer
-  leds[0] = CRGB(0, 0, 255);
+  leds[0] = CRGB(0, 0, globalBrightness);
   FastLED.show();
   lastReceived = millis();
 }
@@ -320,4 +333,47 @@ float fscale(float originalMin, float originalMax, float newBegin, float newEnd,
   }
 
   return rangedValue;
+}
+
+void buttonCheck()
+{
+  int but = digitalRead(BUTTON_PIN);
+  Serial.print("buttonCheck: ");
+  Serial.println(but);
+  if (but == 0) {
+    if (millis() - buttonChecked < buttonDoubleTapDelay && buttonClicked == false ) {
+      doubleClicked();
+      doubleTapped = true;
+    }
+    clickTrigger = true;
+    buttonClicked = true; 
+    buttonChecked = millis();
+  }
+
+  else if (but == 1) {
+    if (millis() - buttonChecked > buttonDoubleTapDelay && clickTrigger) {
+      if (!doubleTapped) {
+        clicked();
+      }
+      clickTrigger = false;
+      doubleTapped = false;
+    }
+    buttonClicked = false;
+  }
+}
+
+void clicked() {
+  changeBrightness();
+}
+
+void changeBrightness() {
+  globalBrightness -= 20;
+  if (globalBrightness < 0) {
+    globalBrightness = MAX_BRIGHTNESS;
+  }
+  Serial.printf("Setting brightness to %d \n", globalBrightness);
+}
+
+void doubleClicked() {
+
 }
